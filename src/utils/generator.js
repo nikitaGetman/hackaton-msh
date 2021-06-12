@@ -29,13 +29,6 @@ export function generateRectangles(squares) {
     for (let j = 0; j < rowLength; j += 1) {
       const { weight } = squares[i][j]
 
-      //   const colors = {
-      //     worst: '#ff2500',
-      //     bad: '#ff7300',
-      //     normal: '#ffcc01',
-      //     good: '#cbfb2b',
-      //     best: '#7dfa7a'
-      //   }
       const colors = {
         worst: '#c21a0c',
         bad: '#f78c03',
@@ -51,6 +44,7 @@ export function generateRectangles(squares) {
 
       rects[j + i * rowLength] = {
         id: `${i}-${j}`,
+
         coords: squares[i][j].coords,
         options: { ...defaultOptions, fillColor: color }
       }

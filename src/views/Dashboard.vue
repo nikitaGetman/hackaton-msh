@@ -96,11 +96,11 @@ export default {
       if (objectGeometry === 'Rectangle') {
         if (this.model.objectId) {
           this.objectManager.objects.setObjectOptions(this.model.objectId, {
-            fillOpacity: 0.3
+            strokeWidth: 0
           })
         }
         this.objectManager.objects.setObjectOptions(objectId, {
-          fillOpacity: 0.1
+          strokeWidth: 2
         })
         this.model.objectId = objectId
         this.model.data = zone
@@ -116,14 +116,14 @@ export default {
       this.objectManager = new ymaps.ObjectManager()
       this.objectManager.objects.events.add(['click'], this.handleRectangleClick)
 
-      this.search()
+      // this.search()
     },
     search() {
       this.sidebarLoading = true
       setTimeout(() => {
         const squares = generateSquares({
           startCoords: [55.79, 37.54],
-          matrixSize: 15,
+          matrixSize: 20,
           sideLength: 0.007
         })
         const rects = generateRectangles(squares)
