@@ -17,11 +17,24 @@ export function generateSquares({ startCoords, matrixSize, sideLength }) {
 
   return squares
 }
+export function generatePoints({ startCoords, endCoords, count }) {
+  const points = []
+  const maxLat = endCoords[0] - startCoords[0]
+  const maxLong = endCoords[1] - startCoords[1]
+
+  for (let i = 0; i < count; i += 1) {
+    const lat = Math.random() * maxLat + startCoords[0]
+    const long = Math.random() * maxLong + startCoords[1]
+    points.push([lat, long])
+  }
+
+  return points
+}
 
 export function generateRectangles(squares) {
   const rects = []
   const defaultOptions = {
-    fillOpacity: 0.3,
+    fillOpacity: 0.2,
     strokeWidth: 0
   }
   for (let i = 0; i < squares.length; i += 1) {
@@ -74,4 +87,19 @@ export function generateObjects(rects) {
   }
 
   return objects
+}
+
+export function generateMarkers(points) {
+  const markers = {
+    type: 'FeatureCollection',
+    features: []
+  }
+  for (let i = 0; i < points.length; i += 1) {
+    markers.features.push({
+      type: 'Feature',
+      id: i,
+      geometry: { type: 'Point', coordinates: points[i] }
+    })
+  }
+  return markers
 }

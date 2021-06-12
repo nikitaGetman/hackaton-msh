@@ -8,8 +8,8 @@
       <v-container fluid class="dashboard fill-height align-stretch">
         <v-row>
           <!-- <transition name="sidebar-slide"> -->
-          <v-col v-if="isSidebarOpen" :cols="3" class="dashboard__sidebar">
-            <the-sidebar :loading="sidebarLoading" @submit="search" />
+          <v-col v-show="isSidebarOpen" :cols="3" class="dashboard__sidebar">
+            <the-sidebar :loading="isSidebarLoading" @submit="search" />
           </v-col>
           <!-- </transition> -->
 
@@ -18,28 +18,24 @@
               :options="mapConfig.options"
               :settings="$options.MAP_SETTINGS"
               :coords="mapConfig.coords"
-              :controls="[]"
+              :controls="mapConfig.controls"
               :zoom="mapConfig.zoom"
               @map-was-initialized="setMap"
             >
             </yandex-map>
+
+            <div v-if="isPanoramaOpen" id="panorama-player" class="dashboard__panorama"></div>
           </v-col>
         </v-row>
       </v-container>
 
-      <v-bottom-sheet :value="isSheetOpen" inset hide-overlay persistent no-click-animation>
-        <v-sheet class="sheet pt-4 px-2">
-          <base-loader :active="sheetLoading" />
-          <v-btn icon class="sheet__close" @click="closeSheet">
-            <v-icon>mdi-close</v-icon>
-          </v-btn>
-          <div class="sheet__content">
-            <div class="mt-1 mx-3">
-              Данные и рекомендации для участка
-            </div>
-          </div>
-        </v-sheet>
-      </v-bottom-sheet>
+      <the-sheet
+        v-model="isSheetOpen"
+        :loading="isSheetLoading"
+        :data="model.data"
+        :type="model.type"
+        @open-panorama="opanPanorama"
+      />
     </v-main>
   </v-app>
 </template>
@@ -48,8 +44,15 @@
 /* eslint-disable no-undef */
 import { yandexMap } from 'vue-yandex-maps'
 import TheSidebar from '@/components/TheSidebar.vue'
-import BaseLoader from '@/components/BaseLoader.vue'
-import { generateSquares, generateRectangles, generateObjects } from '@/utils/generator'
+import TheSheet from '@/components/TheSheet.vue'
+
+import {
+  generateSquares,
+  generatePoints,
+  generateMarkers,
+  generateRectangles,
+  generateObjects
+} from '@/utils/generator'
 
 const DEFAULT_MOSCOW_COORDS = Object.freeze([55.7503535552648, 37.61581057094254])
 const MAP_SETTINGS = {
@@ -61,13 +64,14 @@ const MAP_SETTINGS = {
 
 export default {
   name: 'Dashboard',
-  components: { yandexMap, TheSidebar, BaseLoader },
+  components: { yandexMap, TheSidebar, TheSheet },
   MAP_SETTINGS,
   data() {
     return {
       mapConfig: {
         coords: DEFAULT_MOSCOW_COORDS,
         zoom: 12,
+        controls: ['zoomControl'],
         options: {
           restrictMapArea: [
             [55.4, 37],
@@ -77,49 +81,116 @@ export default {
         }
       },
       map: null,
-      objectManager: null,
-      model: { objectId: null, data: null },
+      zonesManager: null,
+      availPointsManager: null,
+      concurentsManager: null,
+      model: { type: null, objectId: null, data: null },
+      isPanoramaOpen: false,
       isSidebarOpen: true,
       isSheetOpen: false,
 
-      sidebarLoading: false,
-      sheetLoading: false
+      isSidebarLoading: false,
+      isSheetLoading: false
     }
   },
   computed: {},
+  watch: {
+    // isSheetOpen(val) {
+    //   if (!val) {
+    //     this.zonesManager.objects.setObjectOptions(this.model.objectId, {
+    //       strokeWidth: 0
+    //     })
+    //     this.model.objectId = null
+    //     this.model.data = null
+    //   }
+    // }
+  },
   created() {},
   methods: {
-    handleRectangleClick(e) {
+    handleZoneClick(e) {
       const objectId = e.get('objectId')
-      const zone = this.objectManager.objects.getById(objectId)
+      const zone = this.zonesManager.objects.getById(objectId)
       const objectGeometry = zone.geometry.type
       if (objectGeometry === 'Rectangle') {
-        if (this.model.objectId) {
-          this.objectManager.objects.setObjectOptions(this.model.objectId, {
-            strokeWidth: 0
-          })
-        }
-        this.objectManager.objects.setObjectOptions(objectId, {
+        this.clearModel()
+        this.zonesManager.objects.setObjectOptions(objectId, {
           strokeWidth: 2
         })
         this.model.objectId = objectId
         this.model.data = zone
+        this.model.type = 'zone'
         this.isSheetOpen = true
-        this.sheetLoading = true
+        this.isSheetLoading = true
         setTimeout(() => {
-          this.sheetLoading = false
+          this.isSheetLoading = false
+        }, 1000)
+      }
+    },
+    handleAvailClick(e) {
+      const objectId = e.get('objectId')
+      const point = this.availPointsManager.objects.getById(objectId)
+      const objectGeometry = point.geometry.type
+      if (objectGeometry === 'Point') {
+        this.clearModel()
+
+        this.availPointsManager.objects.setObjectOptions(objectId, {
+          preset: 'islands#blueDotIcon'
+        })
+        this.model.objectId = objectId
+        this.model.data = point
+        this.model.type = 'avail'
+
+        this.isSheetOpen = true
+        this.isSheetLoading = true
+        setTimeout(() => {
+          this.isSheetLoading = false
+        }, 1000)
+      }
+    },
+    handleConcClick(e) {
+      const objectId = e.get('objectId')
+      const point = this.concurentsManager.objects.getById(objectId)
+      const objectGeometry = point.geometry.type
+      if (objectGeometry === 'Point') {
+        this.clearModel()
+
+        this.concurentsManager.objects.setObjectOptions(objectId, {
+          preset: 'islands#redDotIcon'
+        })
+        this.model.objectId = objectId
+        this.model.data = point
+        this.model.type = 'conc'
+
+        this.isSheetOpen = true
+        this.isSheetLoading = true
+        setTimeout(() => {
+          this.isSheetLoading = false
         }, 1000)
       }
     },
     setMap(map) {
       this.map = map
-      this.objectManager = new ymaps.ObjectManager()
-      this.objectManager.objects.events.add(['click'], this.handleRectangleClick)
+      this.zonesManager = new ymaps.ObjectManager()
+      this.zonesManager.objects.events.add(['click'], this.handleZoneClick)
 
-      // this.search()
+      this.availPointsManager = new ymaps.ObjectManager({ clusterize: true, gridSize: 32 })
+      this.availPointsManager.objects.options.set('preset', 'islands#blueCircleDotIcon')
+      this.availPointsManager.clusters.options.set('preset', 'islands#blueClusterIcons')
+      this.availPointsManager.objects.events.add(['click'], this.handleAvailClick)
+
+      this.concurentsManager = new ymaps.ObjectManager()
+      this.concurentsManager.objects.options.set('preset', 'islands#redCircleDotIcon')
+      this.concurentsManager.clusters.options.set('preset', 'islands#invertedRedClusterIcons')
+      this.concurentsManager.objects.events.add(['click'], this.handleConcClick)
+
+      this.map.geoObjects.add(this.zonesManager)
+      this.map.geoObjects.add(this.availPointsManager)
+
+      this.search()
+      // this.fetchAvailiablePoints()
     },
     search() {
-      this.sidebarLoading = true
+      this.isSidebarLoading = true
       setTimeout(() => {
         const squares = generateSquares({
           startCoords: [55.79, 37.54],
@@ -127,20 +198,75 @@ export default {
           sideLength: 0.007
         })
         const rects = generateRectangles(squares)
-
         const objects = generateObjects(rects)
+        this.zonesManager.removeAll()
+        this.zonesManager.add(objects)
+        this.map.geoObjects.add(this.zonesManager)
+        this.isSidebarLoading = false
 
-        this.objectManager.removeAll()
-        this.objectManager.add(objects)
-
-        this.map.geoObjects.add(this.objectManager)
-
-        this.sidebarLoading = false
+        this.fetchAvailiablePoints()
+        this.fetchConcurents()
       }, 100)
     },
 
-    closeSheet() {
+    fetchAvailiablePoints() {
+      const points = generatePoints({
+        startCoords: [55.79, 37.54],
+        endCoords: [55.79 - 0.007 * 10, 37.54 + 0.007 * 20],
+        count: 20
+      })
+      const markers = generateMarkers(points)
+      this.availPointsManager.removeAll()
+      this.availPointsManager.add(markers)
+      this.map.geoObjects.add(this.availPointsManager)
+    },
+    fetchConcurents() {
+      const points = generatePoints({
+        startCoords: [55.79, 37.54],
+        endCoords: [55.79 - 0.007 * 10, 37.54 + 0.007 * 20],
+        count: 20
+      })
+      const markers = generateMarkers(points)
+      this.concurentsManager.removeAll()
+      this.concurentsManager.add(markers)
+      this.map.geoObjects.add(this.concurentsManager)
+    },
+
+    clearModel() {
+      if (this.model.type === 'zone') {
+        this.zonesManager.objects.setObjectOptions(this.model.objectId, {
+          strokeWidth: 0
+        })
+      }
+      if (this.model.type === 'avail') {
+        this.availPointsManager.objects.setObjectOptions(this.model.objectId, {
+          preset: 'islands#blueCircleDotIcon'
+        })
+      }
+      if (this.model.type === 'conc') {
+        this.concurentsManager.objects.setObjectOptions(this.model.objectId, {
+          preset: 'islands#redCircleDotIcon'
+        })
+      }
+
+      this.model.type = null
+      this.model.objectId = null
+      this.model.data = null
+    },
+
+    opanPanorama(coords) {
+      if (!ymaps.panorama.isSupported()) return
+
       this.isSheetOpen = false
+      this.isPanoramaOpen = true
+      this.$nextTick(() => {
+        ymaps.panorama.createPlayer('panorama-player', coords).done(player => {
+          player.events.add(['destroy'], () => {
+            this.isPanoramaOpen = false
+            this.isSheetOpen = true
+          })
+        })
+      })
     }
   }
 }
@@ -150,10 +276,19 @@ export default {
 .dashboard {
   &__map-wrapper {
     // transition: all 0.3s;
+    position: relative;
     .ymap-container {
       width: 100%;
       height: 100%;
     }
+  }
+
+  #panorama-player {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
   }
 
   // .sidebar-slide-enter-active {
@@ -167,22 +302,5 @@ export default {
   //   transform: translateX(100px);
   //   opacity: 0;
   // }
-}
-
-.sheet {
-  display: flex;
-  flex-direction: column;
-  position: relative;
-  min-height: 200px;
-  max-height: 250px;
-
-  &__close {
-    position: absolute;
-    right: 12px;
-    top: 12px;
-  }
-  &__content {
-    overflow-y: auto;
-  }
 }
 </style>
