@@ -5,9 +5,9 @@ module.exports = {
     open: true,
     watchOptions: {
       poll: true
-    }
+    },
     // Configure proxy, more: https://github.com/chimurai/http-proxy-middleware#http-proxy-options
-    // proxy: 'http://localhost:1337/'
+    proxy: 'http://45.9.24.21:3000'
   },
 
   css: {

@@ -1,5 +1,5 @@
 <template>
-  <v-app>
+  <v-app class="app">
     <v-app-bar app color="primary" dark>
       <v-app-bar-nav-icon @click="isSidebarOpen = !isSidebarOpen" />
     </v-app-bar>
@@ -25,6 +25,8 @@
             </yandex-map>
 
             <div v-if="isPanoramaOpen" id="panorama-player" class="dashboard__panorama"></div>
+
+            <!-- <map-legend /> -->
           </v-col>
         </v-row>
       </v-container>
@@ -45,14 +47,9 @@
 import { yandexMap } from 'vue-yandex-maps'
 import TheSidebar from '@/components/TheSidebar.vue'
 import TheSheet from '@/components/TheSheet.vue'
+import backendService from '@/services/backend'
 
-import {
-  generateSquares,
-  generatePoints,
-  generateMarkers,
-  generateRectangles,
-  generateObjects
-} from '@/utils/generator'
+import { generateMarkers, generateRectanglesBackend, generateObjects } from '@/utils/generator'
 
 const DEFAULT_MOSCOW_COORDS = Object.freeze([55.7503535552648, 37.61581057094254])
 const MAP_SETTINGS = {
@@ -90,7 +87,9 @@ export default {
       isSheetOpen: false,
 
       isSidebarLoading: false,
-      isSheetLoading: false
+      isSheetLoading: false,
+
+      fetchParams: { action: null, customFilters: null }
     }
   },
   computed: {},
@@ -111,26 +110,33 @@ export default {
       const objectId = e.get('objectId')
       const zone = this.zonesManager.objects.getById(objectId)
       const objectGeometry = zone.geometry.type
-      if (objectGeometry === 'Rectangle') {
+      if (objectGeometry === 'Rectangle' && this.model.objectId !== objectId) {
         this.clearModel()
         this.zonesManager.objects.setObjectOptions(objectId, {
           strokeWidth: 2
         })
         this.model.objectId = objectId
-        this.model.data = zone
         this.model.type = 'zone'
         this.isSheetOpen = true
         this.isSheetLoading = true
-        setTimeout(() => {
-          this.isSheetLoading = false
-        }, 1000)
+
+        console.log(zone)
+
+        backendService
+          .fetchZoneInfo(zone.id)
+          .then(info => {
+            this.model.data = info
+          })
+          .finally(() => {
+            this.isSheetLoading = false
+          })
       }
     },
     handleAvailClick(e) {
       const objectId = e.get('objectId')
       const point = this.availPointsManager.objects.getById(objectId)
       const objectGeometry = point.geometry.type
-      if (objectGeometry === 'Point') {
+      if (objectGeometry === 'Point' && this.model.objectId !== objectId) {
         this.clearModel()
 
         this.availPointsManager.objects.setObjectOptions(objectId, {
@@ -151,7 +157,7 @@ export default {
       const objectId = e.get('objectId')
       const point = this.concurentsManager.objects.getById(objectId)
       const objectGeometry = point.geometry.type
-      if (objectGeometry === 'Point') {
+      if (objectGeometry === 'Point' && this.model.objectId !== objectId) {
         this.clearModel()
 
         this.concurentsManager.objects.setObjectOptions(objectId, {
@@ -186,50 +192,46 @@ export default {
       this.map.geoObjects.add(this.zonesManager)
       this.map.geoObjects.add(this.availPointsManager)
 
-      this.search()
+      // this.search()
       // this.fetchAvailiablePoints()
     },
-    search() {
-      this.isSidebarLoading = true
-      setTimeout(() => {
-        const squares = generateSquares({
-          startCoords: [55.79, 37.54],
-          matrixSize: 20,
-          sideLength: 0.007
-        })
-        const rects = generateRectangles(squares)
-        const objects = generateObjects(rects)
-        this.zonesManager.removeAll()
-        this.zonesManager.add(objects)
-        this.map.geoObjects.add(this.zonesManager)
-        this.isSidebarLoading = false
 
-        this.fetchAvailiablePoints()
-        this.fetchConcurents()
-      }, 100)
+    search(params) {
+      this.isSidebarLoading = true
+      this.fetchParams = { action: params.action }
+
+      backendService
+        .fetchZones(params)
+        .then(squares => {
+          const rects = generateRectanglesBackend(squares)
+          const objects = generateObjects(rects)
+          this.zonesManager.removeAll()
+          this.zonesManager.add(objects)
+          this.map.geoObjects.add(this.zonesManager)
+
+          this.fetchAvailiablePoints()
+          this.fetchConcurents()
+        })
+        .finally(() => {
+          this.isSidebarLoading = false
+        })
     },
 
-    fetchAvailiablePoints() {
-      const points = generatePoints({
-        startCoords: [55.79, 37.54],
-        endCoords: [55.79 - 0.007 * 10, 37.54 + 0.007 * 20],
-        count: 20
+    fetchAvailiablePoints(type) {
+      backendService.fetchAvailablePoints({ action: this.fetchParams.action, type }).then(points => {
+        const markers = generateMarkers(points)
+        this.availPointsManager.removeAll()
+        this.availPointsManager.add(markers)
+        this.map.geoObjects.add(this.availPointsManager)
       })
-      const markers = generateMarkers(points)
-      this.availPointsManager.removeAll()
-      this.availPointsManager.add(markers)
-      this.map.geoObjects.add(this.availPointsManager)
     },
     fetchConcurents() {
-      const points = generatePoints({
-        startCoords: [55.79, 37.54],
-        endCoords: [55.79 - 0.007 * 10, 37.54 + 0.007 * 20],
-        count: 20
+      backendService.fetchConcurents({ action: this.fetchParams.action }).then(points => {
+        const markers = generateMarkers(points)
+        this.concurentsManager.removeAll()
+        this.concurentsManager.add(markers)
+        this.map.geoObjects.add(this.concurentsManager)
       })
-      const markers = generateMarkers(points)
-      this.concurentsManager.removeAll()
-      this.concurentsManager.add(markers)
-      this.map.geoObjects.add(this.concurentsManager)
     },
 
     clearModel() {
@@ -260,12 +262,17 @@ export default {
       this.isSheetOpen = false
       this.isPanoramaOpen = true
       this.$nextTick(() => {
-        ymaps.panorama.createPlayer('panorama-player', coords).done(player => {
-          player.events.add(['destroy'], () => {
-            this.isPanoramaOpen = false
-            this.isSheetOpen = true
+        try {
+          ymaps.panorama.createPlayer('panorama-player', coords).done(player => {
+            player.events.add(['destroy'], () => {
+              this.isPanoramaOpen = false
+              this.isSheetOpen = true
+            })
           })
-        })
+        } catch (e) {
+          /* eslint-disable no-alert */
+          alert('Не удалось найти панораму данной точки')
+        }
       })
     }
   }
@@ -273,7 +280,15 @@ export default {
 </script>
 
 <style lang="scss">
+.app {
+  height: 100vh;
+  overflow: hidden;
+}
 .dashboard {
+  &__sidebar {
+    max-height: 100%;
+    overflow-y: auto;
+  }
   &__map-wrapper {
     // transition: all 0.3s;
     position: relative;
