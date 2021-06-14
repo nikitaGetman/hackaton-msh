@@ -213,13 +213,13 @@ export default {
   },
   methods: {
     submit() {
-      if (this.isCustomFiltersOpen) {
-        const { customFilters } = this
-        this.$emit('submit', { ...customFilters })
-      } else {
-        const { action } = this
-        this.$emit('submit', { action: action.id })
-      }
+      // if (this.isCustomFiltersOpen) {
+      //   const { customFilters } = this
+      //   this.$emit('submit', { ...customFilters })
+      // } else {
+      const { action } = this
+      this.$emit('submit', { action: action.id })
+      // }
     }
   }
 }

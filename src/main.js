@@ -6,6 +6,8 @@ import authService from './services/auth'
 import initializeHttpInterceptors from './http/interceptors'
 
 import '@/assets/scss/base.scss'
+import 'vue-histogram-slider/dist/histogram-slider.css'
+
 import vuetify from './plugins/vuetify'
 
 Vue.config.productionTip = false

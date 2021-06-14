@@ -15,6 +15,7 @@
     "lodash.isequal": "^4.5.0",
     "vue": "~2.6.11",
     "vue-element-loading": "^2.0.2",
+    "vue-histogram-slider": "^0.3.8",
     "vue-router": "^3.2.0",
     "vue-yandex-maps": "^0.10.11",
     "vuetify": "^2.4.0",

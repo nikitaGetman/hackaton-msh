@@ -26,7 +26,7 @@
 
             <div v-if="isPanoramaOpen" id="panorama-player" class="dashboard__panorama"></div>
 
-            <!-- <map-legend /> -->
+            <map-legend :show-avail.sync="isAvailableVisible" :show-conc.sync="isConcVisible" />
           </v-col>
         </v-row>
       </v-container>
@@ -35,8 +35,13 @@
         v-model="isSheetOpen"
         :loading="isSheetLoading"
         :data="model.data"
+        :data-list="model.dataList"
         :type="model.type"
         @open-panorama="opanPanorama"
+        @start-compare="startCompare"
+        @stop-compare="stopCompare"
+        @hover-zone="hoverZone"
+        @unhover-zone="unhoverZone"
       />
     </v-main>
   </v-app>
@@ -48,10 +53,11 @@ import { yandexMap } from 'vue-yandex-maps'
 import TheSidebar from '@/components/TheSidebar.vue'
 import TheSheet from '@/components/TheSheet.vue'
 import backendService from '@/services/backend'
+import MapLegend from '@/components/MapLegend.vue'
 
 import { generateMarkers, generateRectanglesBackend, generateObjects } from '@/utils/generator'
 
-const DEFAULT_MOSCOW_COORDS = Object.freeze([55.7503535552648, 37.61581057094254])
+const DEFAULT_MOSCOW_COORDS = Object.freeze([55.74, 37.625])
 const MAP_SETTINGS = {
   apiKey: process.env.VUE_APP_MAP_KEY,
   lang: 'ru_RU',
@@ -61,13 +67,13 @@ const MAP_SETTINGS = {
 
 export default {
   name: 'Dashboard',
-  components: { yandexMap, TheSidebar, TheSheet },
+  components: { yandexMap, TheSidebar, TheSheet, MapLegend },
   MAP_SETTINGS,
   data() {
     return {
       mapConfig: {
         coords: DEFAULT_MOSCOW_COORDS,
-        zoom: 12,
+        zoom: 13,
         controls: ['zoomControl'],
         options: {
           restrictMapArea: [
@@ -81,28 +87,52 @@ export default {
       zonesManager: null,
       availPointsManager: null,
       concurentsManager: null,
-      model: { type: null, objectId: null, data: null },
+      model: { type: null, objectId: null, data: null, isCompare: false, dataList: [], objectIds: [] },
       isPanoramaOpen: false,
       isSidebarOpen: true,
       isSheetOpen: false,
 
       isSidebarLoading: false,
       isSheetLoading: false,
+      isAvailableVisible: true,
+      isConcVisible: false,
 
       fetchParams: { action: null, customFilters: null }
     }
   },
   computed: {},
   watch: {
-    // isSheetOpen(val) {
-    //   if (!val) {
-    //     this.zonesManager.objects.setObjectOptions(this.model.objectId, {
-    //       strokeWidth: 0
-    //     })
-    //     this.model.objectId = null
-    //     this.model.data = null
-    //   }
-    // }
+    isSheetOpen(val) {
+      if (!val) {
+        this.model.isCompare = false
+        // this.model.
+      }
+    },
+    'model.dataList': {
+      handler(val, oldVal) {
+        if (val.length < oldVal.length) {
+          this.model.objectIds.forEach(id => {
+            this.zonesManager.objects.setObjectOptions(id, {
+              strokeWidth: 0
+            })
+          })
+        }
+      }
+    },
+    isAvailableVisible(val) {
+      if (val) this.fetchAvailiablePoints()
+      else {
+        this.availPointsManager.removeAll()
+        this.map.geoObjects.add(this.availPointsManager)
+      }
+    },
+    isConcVisible(val) {
+      if (val) this.fetchConcurents()
+      else {
+        this.concurentsManager.removeAll()
+        this.map.geoObjects.add(this.concurentsManager)
+      }
+    }
   },
   created() {},
   methods: {
@@ -111,25 +141,36 @@ export default {
       const zone = this.zonesManager.objects.getById(objectId)
       const objectGeometry = zone.geometry.type
       if (objectGeometry === 'Rectangle' && this.model.objectId !== objectId) {
-        this.clearModel()
-        this.zonesManager.objects.setObjectOptions(objectId, {
-          strokeWidth: 2
-        })
-        this.model.objectId = objectId
-        this.model.type = 'zone'
-        this.isSheetOpen = true
-        this.isSheetLoading = true
-
-        console.log(zone)
-
-        backendService
-          .fetchZoneInfo(zone.id)
-          .then(info => {
-            this.model.data = info
+        if (!this.model.isCompare) {
+          this.clearModel()
+          this.zonesManager.objects.setObjectOptions(objectId, {
+            strokeWidth: 2
           })
-          .finally(() => {
+          this.model.objectId = objectId
+          this.model.type = 'zone'
+          this.isSheetOpen = true
+          this.isSheetLoading = true
+
+          backendService
+            .fetchZoneInfo(zone.id, this.fetchParams.action)
+            .then(info => {
+              this.model.data = info
+            })
+            .finally(() => {
+              this.isSheetLoading = false
+            })
+        } else {
+          this.isSheetLoading = true
+          this.zonesManager.objects.setObjectOptions(objectId, {
+            strokeWidth: 2
+          })
+
+          backendService.fetchZoneInfo(zone.id, this.fetchParams.action).then(info => {
+            this.model.dataList.push(info)
+            this.model.objectIds.push(objectId)
             this.isSheetLoading = false
           })
+        }
       }
     },
     handleAvailClick(e) {
@@ -147,10 +188,6 @@ export default {
         this.model.type = 'avail'
 
         this.isSheetOpen = true
-        this.isSheetLoading = true
-        setTimeout(() => {
-          this.isSheetLoading = false
-        }, 1000)
       }
     },
     handleConcClick(e) {
@@ -218,20 +255,29 @@ export default {
     },
 
     fetchAvailiablePoints(type) {
-      backendService.fetchAvailablePoints({ action: this.fetchParams.action, type }).then(points => {
-        const markers = generateMarkers(points)
-        this.availPointsManager.removeAll()
-        this.availPointsManager.add(markers)
-        this.map.geoObjects.add(this.availPointsManager)
-      })
+      if (this.isAvailableVisible) {
+        backendService.fetchAvailablePoints({ action: this.fetchParams.action, type }).then(points => {
+          this.availPointsManager.removeAll()
+          this.availPointsManager.add(points)
+          this.map.geoObjects.add(this.availPointsManager)
+        })
+      }
     },
     fetchConcurents() {
-      backendService.fetchConcurents({ action: this.fetchParams.action }).then(points => {
-        const markers = generateMarkers(points)
-        this.concurentsManager.removeAll()
-        this.concurentsManager.add(markers)
-        this.map.geoObjects.add(this.concurentsManager)
-      })
+      if (this.isConcVisible && this.fetchParams.action) {
+        backendService.fetchConcurents({ action: this.fetchParams.action }).then(points => {
+          const markers = generateMarkers(points)
+          this.concurentsManager.removeAll()
+          this.concurentsManager.add(markers)
+          this.map.geoObjects.add(this.concurentsManager)
+        })
+      }
+    },
+    hoverZone() {
+      // console.log(zone)
+    },
+    unhoverZone() {
+      // console.log(zone)
     },
 
     clearModel() {
@@ -254,6 +300,18 @@ export default {
       this.model.type = null
       this.model.objectId = null
       this.model.data = null
+      this.model.isCompare = false
+      this.model.dataList = []
+      this.model.objectIds = []
+    },
+    startCompare() {
+      this.model.isCompare = true
+      this.model.dataList = [this.model.data]
+      this.model.objectIds = []
+    },
+    stopCompare() {
+      this.model.isCompare = false
+      this.model.dataList = []
     },
 
     opanPanorama(coords) {

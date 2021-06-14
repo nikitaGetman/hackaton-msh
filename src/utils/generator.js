@@ -134,3 +134,19 @@ export function generateMarkers(points) {
   }
   return markers
 }
+
+export function generateMarkersBackend(points) {
+  const markers = {
+    type: 'FeatureCollection',
+    features: []
+  }
+  for (let i = 0; i < points.length; i += 1) {
+    markers.features.push({
+      type: 'Feature',
+      id: points[i].id,
+      data: { ...points[i] },
+      geometry: { type: 'Point', coordinates: [points[i].lat, points[i].lon] }
+    })
+  }
+  return markers
+}

@@ -1,6 +1,6 @@
 import client from '@/http/client'
 
-import { generatePoints } from '@/utils/generator'
+import { generateMarkersBackend, generatePoints } from '@/utils/generator'
 
 /* eslint-disable vue/max-len */
 const RECOMENDATIONS = [
@@ -35,16 +35,16 @@ const RECOMENDATIONS = [
     title: 'Wi-Fi-радар и Wi-Fi-точка',
     text: `Wi-Fi — дополнительная точка коммуникации с клиентами. С его помощью вы можете собрать MAC-адреса телефонов посетителей и прохожих, а потом настроить на них таргетированную рекламу.`
   },
-  {
-    title: 'Реклама на радио',
-    text: `Если вы хотите повысить узнаваемость у широких масс, закажите рекламу на радио. Цены разные, в зависимости от уровня и широты звучания радиостанции (местная или всероссийская).`
-  },
+  //   {
+  //     title: 'Реклама на радио',
+  //     text: `Если вы хотите повысить узнаваемость у широких масс, закажите рекламу на радио. Цены разные, в зависимости от уровня и широты звучания радиостанции (местная или всероссийская).`
+  //   },
   {
     title: 'Реклама в соцсетях.',
     text: `Реклама у видеоблогеров подходит для любых видов офлайн-бизнеса. При размещении рекламных постов в тематических сообществах вебмастер делает публикации в собственных группах или договаривается с администраторами сторонних. Этот инструмент также подходит практически всем рекламодателям.`
   },
   {
-    title: 'Не распыляйтесь - сначала изучите аудиторию.',
+    title: 'Изучите аудиторию.',
     text: `Чтобы понять, какой именно метод сработает, изучите клиентов насколько возможно — где они живут, о чем думают, что смотрят. 
               И только после этого выбирайте способ продвижения бизнеса: возможно, именно на вашу аудитории личные продажи подействуют лучше, чем активная реклама.`
   },
@@ -74,7 +74,7 @@ const backendService = {
     return client.get('/api/v1/get_activities').then(res => {
       return res.map(({ config, ...params }) => ({
         ...params,
-        config: { passability: 0, population: config[0], competitors: 0, solvency: config[1], availability: 0 }
+        config: { passability: config[2], population: config[0], competitors: 0, solvency: config[1], availability: 0 }
       }))
     })
   },
@@ -91,6 +91,7 @@ const backendService = {
     //     resolve(squares)
     //   }, 1000)
     // })
+
     // return Promise.resolve(squares)
 
     // return client.get(`/api/v1/heatmap/${params.action}`, { params }).then(res => {
@@ -105,6 +106,7 @@ const backendService = {
 
     //   return formattedResults
     // })
+
     const actId = action
     return client.get(`/api/v1/heatmap`, { params: { actId, ...params } }).then(res => {
       const formattedResults = res.map(zone => ({
@@ -120,46 +122,67 @@ const backendService = {
     })
   },
 
-  fetchZoneInfo(id) {
+  fetchZoneInfo(sectorId, actId) {
     const randomRecomendations = Array.from({ length: 3 }).map(() => {
       const index = Math.round(Math.random() * (RECOMENDATIONS.length - 1))
       return RECOMENDATIONS[index]
     })
-    const zone = {
-      id,
-      passability: Math.random(),
-      population: Math.random(),
-      competitors: Math.random(),
-      solvency: Math.random(),
-      availability: Math.random(),
-      recomendations: randomRecomendations
-    }
-    zone.rating = (zone.passability + zone.population + zone.competitors + zone.solvency + zone.availability) / 5
 
-    return new Promise(resolve => {
-      setTimeout(() => {
-        resolve(zone)
-      }, 1000)
+    return client.get('/api/v1/get_sector_data', { params: { sectorId, actId } }).then(res => {
+      console.log(res)
+
+      const zone = {
+        id: sectorId,
+        passability: res.metrics[2].value || res.generalValue,
+        population: res.metrics[0].value || res.generalValue,
+        competitors: res.generalValue,
+        solvency: res.metrics[1].value || res.generalValue,
+        availability: res.generalValue,
+        recomendations: randomRecomendations
+        // rating: res.generalValue
+      }
+      zone.passability = zone.passability > 1 ? 0.9 : zone.passability
+      zone.population = zone.population > 1 ? 0.9 : zone.population
+      zone.solvency = zone.solvency > 1 ? 0.9 : zone.solvency
+
+      zone.rating = (zone.passability + zone.population + zone.solvency) / 3
+      zone.rating = zone.rating > 1 ? 0.9 : zone.rating
+
+      console.log(zone)
+
+      return zone
     })
+    // return new Promise(resolve => {
+    //   setTimeout(() => {
+    //     resolve(zone)
+    //   }, 1000)
+    // })
   },
 
   //   type = 'rent' || 'sell' || null
   //   { action, type }
   fetchAvailablePoints() {
-    const points = generatePoints({
-      startCoords: [55.79, 37.54],
-      endCoords: [55.79 - 0.007 * 10, 37.54 + 0.007 * 20],
-      count: 20
-    })
+    // const points = generatePoints({
+    //   startCoords: [55.79, 37.54],
+    //   endCoords: [55.79 - 0.007 * 10, 37.54 + 0.007 * 20],
+    //   count: 20
+    // })
 
-    return Promise.resolve(points)
+    // return Promise.resolve(points)
+
+    return client.get('/api/v1/get_some_offices').then(res => {
+      const markers = generateMarkersBackend(res)
+      return markers
+    })
   },
-  // { action }
-  fetchConcurents() {
+
+  fetchConcurents({ action }) {
+    const count = 15 + action * 2
+
     const points = generatePoints({
-      startCoords: [55.79, 37.54],
-      endCoords: [55.79 - 0.007 * 10, 37.54 + 0.007 * 20],
-      count: 20
+      startCoords: [55.751644, 37.55],
+      endCoords: [55.72, 37.693],
+      count
     })
 
     return Promise.resolve(points)
