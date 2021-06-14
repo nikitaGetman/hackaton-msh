@@ -59,7 +59,7 @@ import { generateMarkers, generateRectanglesBackend, generateObjects } from '@/u
 
 const DEFAULT_MOSCOW_COORDS = Object.freeze([55.74, 37.625])
 const MAP_SETTINGS = {
-  apiKey: process.env.VUE_APP_MAP_KEY,
+  apiKey: '6b68307b-23e6-4b58-ba7c-cd14578e37c9',
   lang: 'ru_RU',
   coordorder: 'latlong',
   version: '2.1'
@@ -241,6 +241,8 @@ export default {
         .fetchZones(params)
         .then(squares => {
           const rects = generateRectanglesBackend(squares)
+          // const rects = generateRectangles(squares)
+          //
           const objects = generateObjects(rects)
           this.zonesManager.removeAll()
           this.zonesManager.add(objects)

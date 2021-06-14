@@ -71,6 +71,16 @@ const RECOMENDATIONS = [
 
 const backendService = {
   fetchActivities() {
+    // const DEFAULT_SCOPES = [
+    //   { scopeId: 1, scopeName: 'Фуд ритейл', id: 1, name: 'Булочная' },
+    //   { scopeId: 1, scopeName: 'Фуд ритейл', id: 2, name: 'Продуктовый магазин' },
+    //   { scopeId: 2, scopeName: 'Красота и здоровье', id: 3, name: 'Парикмахерская' },
+    //   { scopeId: 2, scopeName: 'Красота и здоровье', id: 4, name: 'Салон красоты' },
+    //   { scopeId: 2, scopeName: 'Красота и здоровье', id: 5, name: 'Стоматология' },
+    //   { scopeId: 3, scopeName: 'Общественное питание', id: 6, name: 'Кафе' },
+    //   { scopeId: 3, scopeName: 'Общественное питание', id: 7, name: 'Бар' }
+    // ]
+    // return Promise.resolve(DEFAULT_SCOPES)
     return client.get('/api/v1/get_activities').then(res => {
       return res.map(({ config, ...params }) => ({
         ...params,
@@ -152,6 +162,18 @@ const backendService = {
 
       return zone
     })
+
+    // const zone = {
+    //   id: sectorId,
+    //   passability: Math.random(),
+    //   population: Math.random(),
+    //   competitors: Math.random(),
+    //   solvency: Math.random(),
+    //   availability: Math.random(),
+    //   recomendations: randomRecomendations
+    // }
+    // zone.rating = (zone.passability + zone.population + zone.competitors + zone.solvency + zone.availability) / 5
+
     // return new Promise(resolve => {
     //   setTimeout(() => {
     //     resolve(zone)
