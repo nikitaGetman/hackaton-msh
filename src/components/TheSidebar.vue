@@ -217,8 +217,8 @@ export default {
       //   const { customFilters } = this
       //   this.$emit('submit', { ...customFilters })
       // } else {
-      const { action } = this
-      this.$emit('submit', { action: action.id })
+      const action = this.isCustomFiltersOpen ? 3 : this.action.id
+      this.$emit('submit', { action })
       // }
     }
   }
